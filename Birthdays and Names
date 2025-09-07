@@ -1,0 +1,78 @@
+import argparse
+import urllib.request
+import logging
+from datetime import datetime
+
+def downloadData(url):
+    """Download data from a given URL and return decoded content as a string."""
+    response = urllib.request.urlopen(url)
+    return response.read().decode('utf-8')
+
+def processData(file_content):
+    """Process CSV data, return {id: (name, birthday)} dictionary. Log errors for bad birthday formats."""
+    logger = logging.getLogger('assignment2')
+    personData = {}
+    lines = file_content.strip().split('\n')
+    for linenum, line in enumerate(lines[1:], start=2):  # skip header, line numbers start at 2
+        try:
+            row = line.strip().split(',')
+            id_str, name, bday_str = row
+            # Try parsing birthday, handle various formats/errors
+            try:
+                birthday = datetime.strptime(bday_str, "%d/%m/%Y").date()
+            except ValueError:
+                try:
+                    birthday = datetime.strptime(bday_str, "%d-%m-%Y").date()
+                except ValueError:
+                    logger.error(f"Error processing line #{linenum} for ID #{id_str}")
+                    continue
+            personData[int(id_str)] = (name, birthday)
+        except Exception as e:
+            # Log any malformed rows (e.g. missing fields)
+            logger.error(f"Error processing line #{linenum} for ID #{row if row else 'UNKNOWN'}")
+    return personData
+
+def displayPerson(id, personData):
+    """Print details for given user id, or report if not found."""
+    if id in personData:
+        name, birthday = personData[id]
+        print(f"Person #{id} is {name} with a birthday of {birthday.strftime('%Y-%m-%d')}")
+    else:
+        print("No user found with that id")
+
+def setupLogger():
+    """Configure logging for the assignment."""
+    logging.basicConfig(
+        filename="errors.log",
+        level=logging.ERROR,
+        format="%(message)s"
+    )
+
+def main():
+    parser = argparse.ArgumentParser(description='Process some birthdays.')
+    parser.add_argument('--url', required=True, help='URL to CSV data.')
+    args = parser.parse_args()
+    setupLogger()
+    try:
+        csvData = downloadData(args.url)
+    except Exception as e:
+        print(f"Error downloading data: {e}")
+        exit(1)
+    personData = processData(csvData)
+    while True:
+        try:
+            input_str = input("Enter an ID to lookup: ")
+            try:
+                id = int(input_str)
+            except ValueError:
+                print("Please enter a valid integer ID.")
+                continue
+            if id <= 0:
+                break
+            displayPerson(id, personData)
+        except KeyboardInterrupt:
+            print("\nExiting.")
+            break
+
+if __name__ == "__main__":
+    main()
